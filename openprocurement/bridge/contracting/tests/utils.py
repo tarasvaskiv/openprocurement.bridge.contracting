@@ -19,7 +19,8 @@ from openprocurement.bridge.contracting.utils import (
     handle_esco_tenders,
     fill_base_contract_data,
     journal_context,
-    generate_milestones
+    generate_milestones,
+    get_contract_max_endDate
 )
 
 PWD = os.path.dirname(os.path.realpath(__file__))
@@ -259,9 +260,7 @@ class TestUtilsFucntions(unittest.TestCase):
         self.assertEquals(last_scheduled_miles['period']['endDate'],
                           contract['period']['endDate'])
         #  last milestone endDate = contract start Date + 15 years
-        contract_delta_15_years = parse_date(contract['period']['startDate'])
-        contract_delta_15_years = contract_delta_15_years.replace(
-            year=contract_delta_15_years.year+15)
+        contract_delta_15_years = get_contract_max_endDate(parse_date(contract['period']['startDate']))
         self.assertEquals(
             contract_delta_15_years.isoformat(),
             parse_date(milestones[-1]['period']['endDate']).isoformat()

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
+from calendar import isleap
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -29,6 +30,13 @@ def to_decimal(fraction):
     return str(Decimal(fraction.numerator) / Decimal(fraction.denominator))
 
 
+def get_contract_max_endDate(contract_start_date):
+    day = contract_start_date.day - 1 if contract_start_date.day == 29 and contract_start_date.month == 2 \
+                                         and not isleap(contract_start_date.year + 15) \
+        else contract_start_date.day
+    return contract_start_date.replace(contract_start_date.year + 15, day=day)
+
+
 def generate_milestones(contract, tender):
     days_per_year = 365
     npv_calculation_duration = 20
@@ -39,7 +47,9 @@ def generate_milestones(contract, tender):
         contract_years = contract['value']['contractDuration']['years']
         contract_end_date = announcement_date.replace(
             year=announcement_date.year + contract_years, hour=0, minute=0,
-            second=0, microsecond=0) + contract_days
+            second=0, microsecond=0,
+            day=announcement_date.day - 1 if announcement_date.day == 29 and announcement_date.month == 2 and not
+            isleap(announcement_date.year + contract_years) else announcement_date.day) + contract_days
         contract['period'] = {
             'startDate': contract['dateSigned'],
             'endDate': contract_end_date.isoformat()
@@ -98,8 +108,7 @@ def generate_milestones(contract, tender):
             milestone['status'] = 'pending'
         elif sequence_number == last_milestone_sequence_number:
             milestone_start_date = TZ.localize(datetime(announcement_date.year + sequence_number - 1, 1, 1))
-            milestone_end_date = contract_start_date.replace(
-                        year=contract_start_date.year + 15)
+            milestone_end_date = get_contract_max_endDate(contract_start_date)
         else:
             milestone_start_date = TZ.localize(datetime(announcement_date.year + sequence_number - 1, 1, 1))
             milestone_end_date = TZ.localize(datetime(announcement_date.year + sequence_number, 1, 1))
