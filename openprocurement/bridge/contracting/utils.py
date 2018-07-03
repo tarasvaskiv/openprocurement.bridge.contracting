@@ -186,6 +186,7 @@ def accelerate_milestones(milestones, days_per_year, accelerator):
 def fill_base_contract_data(contract, tender):
     contract['tender_id'] = tender['id']
     contract['procuringEntity'] = tender['procuringEntity']
+    contract['contractType'] = 'common'
 
     # set contract mode
     if tender.get('mode'):
@@ -272,7 +273,6 @@ def fill_base_contract_data(contract, tender):
 
 def handle_common_tenders(contract, tender):
     fill_base_contract_data(contract, tender)
-    contract['contractType'] = 'common'
     logger.info('Handle common tender {}'.format(tender['id']), extra={"MESSAGE_ID": "handle_common_tenders"})
 
 

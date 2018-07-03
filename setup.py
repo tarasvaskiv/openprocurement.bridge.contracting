@@ -11,6 +11,7 @@ requires = [
     'esculator',
     'iso8601',
     'pytz',
+    'zope.component',
 ]
 
 test_requires = requires + [

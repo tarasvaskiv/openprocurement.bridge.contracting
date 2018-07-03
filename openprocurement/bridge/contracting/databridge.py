@@ -15,6 +15,9 @@ import argparse
 from pkg_resources import iter_entry_points
 from retrying import retry
 from uuid import uuid4
+from zope.component import getGlobalSiteManager, queryUtility
+from zope.component.factory import Factory
+from zope.component.interfaces import IFactory
 
 import gevent
 from gevent.queue import Queue
@@ -45,6 +48,7 @@ from openprocurement.bridge.contracting.utils import (
 )
 
 from openprocurement.bridge.contracting import constants
+from openprocurement.bridge.contracting.interfaces import IContractCreator, BaseCreator, EscoCreator
 
 
 logger = logging.getLogger("openprocurement.bridge.contracting.databridge")
@@ -144,13 +148,6 @@ class ContractingDataBridge(object):
         self.contracts_retry_put_queue = Queue(maxsize=queue_size)
         self.basket = {}
 
-        self.procurementMethodTypes = {
-            'default': handle_common_tenders,
-            'esco': handle_esco_tenders
-        }
-
-        for entry_point in iter_entry_points('openprocurement.bridge.contracting.handlers'):
-            self.procurementMethodTypes[entry_point.name] = entry_point.load()
 
     def init_resource(self):
         """Initialize resource-related constants to adapt to different CBD-s
@@ -385,13 +382,12 @@ class ContractingDataBridge(object):
                         self._put_tender_in_cache_by_contract(contract, tender_to_sync['id'])
                         continue
 
-                    procurement_method_type = tender.get('procurementMethodType')
-                    if procurement_method_type in self.procurementMethodTypes:
-                        handle = self.procurementMethodTypes[procurement_method_type]
-                    else:
-                        handle = self.procurementMethodTypes['default']
+                    contract_creator_class = queryUtility(IFactory, tender.get('procurementMethodType'))
+                    if not contract_creator_class:
+                        contract_creator_class = queryUtility(IFactory, 'default')
+                    contract_creator_instance = contract_creator_class(contract, tender)
+                    contract_creator_instance.create_contract()
 
-                    handle(contract, tender)
                     self.handicap_contracts_queue.put(contract)
 
     def get_tender_contracts(self):
@@ -706,6 +702,22 @@ def main():
         with open(params.config) as config_file_obj:
             config = load(config_file_obj.read())
         logging.config.dictConfig(config)
+
+        global registry
+        registry = getGlobalSiteManager()
+
+        # search for plugins
+        plugins = config.get('plugins') and config['plugins'].split(',')
+        for entry_point in iter_entry_points('openprocurement.bridge.contracting.plugins'):
+            if not plugins or entry_point.name in plugins:
+                plugin = entry_point.load()
+                plugin(registry)
+
+        factory = Factory(BaseCreator, 'BaseCreator')
+        registry.registerUtility(factory, IFactory, 'default')
+        factory_esco = Factory(EscoCreator, 'EscoCreator')
+        registry.registerUtility(factory_esco, IFactory, 'esco')
+
         if params.tender_id:
             ContractingDataBridge(config).sync_single_tender(params.tender_id)
         else:
